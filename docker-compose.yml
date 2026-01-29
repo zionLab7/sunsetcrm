@@ -1,0 +1,40 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: always
+    env_file: .env
+    environment:
+      - DATABASE_URL=postgresql://sunset_user:sunset_password@db:5432/sunset_db?schema=public
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.sunset-crm.rule=Host(`crm.seu-dominio.com`)"
+      - "traefik.http.routers.sunset-crm.entrypoints=websecure"
+      - "traefik.http.routers.sunset-crm.tls.certresolver=myresolver"
+      - "traefik.http.services.sunset-crm.loadbalancer.server.port=3000"
+    networks:
+      - default
+      - proxy
+    depends_on:
+      - db
+
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      - POSTGRES_USER=sunset_user
+      - POSTGRES_PASSWORD=sunset_password
+      - POSTGRES_DB=sunset_db
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - default
+
+volumes:
+  postgres_data:
+
+
+networks:
+  proxy:
+    external: true
