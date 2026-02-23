@@ -8,6 +8,7 @@ import { z } from "zod";
 const productSchema = z.object({
     name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
     stockCode: z.string().min(1, "Código do estoque é obrigatório"),
+    price: z.number().optional().nullable(),
     costPrice: z.number().optional().nullable(),
     customFields: z.record(z.string()).optional(),
 });
@@ -21,8 +22,6 @@ export async function PATCH(
         if (!user) {
             return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
         }
-
-        // Apenas gestores podem editar produtos
         if ((user as any).role !== "GESTOR") {
             return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
@@ -30,14 +29,9 @@ export async function PATCH(
         const body = await request.json();
         const validatedData = productSchema.parse(body);
 
-        // Verificar se código do estoque já existe em outro produto
         const existingProduct = await prisma.product.findFirst({
-            where: {
-                stockCode: validatedData.stockCode,
-                NOT: { id: params.id },
-            },
+            where: { stockCode: validatedData.stockCode, NOT: { id: params.id } },
         });
-
         if (existingProduct) {
             return NextResponse.json(
                 { error: "Código do estoque já existe em outro produto" },
@@ -45,32 +39,22 @@ export async function PATCH(
             );
         }
 
-        // Atualizar campos fixos
         const product = await prisma.product.update({
             where: { id: params.id },
             data: {
                 name: validatedData.name,
                 stockCode: validatedData.stockCode,
+                price: validatedData.price ?? null,
                 costPrice: validatedData.costPrice ?? null,
             },
         });
 
-        // Atualizar campos customizados
-        if (validatedData.customFields) {
-            await prisma.customFieldValue.deleteMany({
-                where: { productId: params.id },
-            });
-
-            const customFieldEntries = Object.entries(validatedData.customFields);
-
-            for (const [fieldId, value] of customFieldEntries) {
+        if (validatedData.customFields !== undefined) {
+            await prisma.customFieldValue.deleteMany({ where: { productId: params.id } });
+            for (const [fieldId, value] of Object.entries(validatedData.customFields)) {
                 if (value && value.trim() !== "") {
                     await prisma.customFieldValue.create({
-                        data: {
-                            customFieldId: fieldId,
-                            productId: product.id,
-                            value: value,
-                        },
+                        data: { customFieldId: fieldId, productId: product.id, value },
                     });
                 }
             }
@@ -78,24 +62,14 @@ export async function PATCH(
 
         const productWithFields = await prisma.product.findUnique({
             where: { id: product.id },
-            include: {
-                customFieldValues: {
-                    include: {
-                        customField: true,
-                    },
-                },
-            },
+            include: { customFieldValues: { include: { customField: true } } },
         });
 
         return NextResponse.json(productWithFields);
     } catch (error: any) {
         if (error instanceof z.ZodError) {
-            return NextResponse.json(
-                { error: error.errors[0].message },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
         }
-
         console.error("Erro ao atualizar produto:", error);
         return NextResponse.json(
             { error: error.message || "Erro ao atualizar produto" },
@@ -113,8 +87,6 @@ export async function DELETE(
         if (!user) {
             return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
         }
-
-        // Apenas gestores podem excluir produtos
         if ((user as any).role !== "GESTOR") {
             return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
@@ -123,14 +95,9 @@ export async function DELETE(
             where: { id: params.id },
             include: { clients: true },
         });
-
         if (!productWithClients) {
-            return NextResponse.json(
-                { error: "Produto não encontrado" },
-                { status: 404 }
-            );
+            return NextResponse.json({ error: "Produto não encontrado" }, { status: 404 });
         }
-
         if (productWithClients.clients.length > 0) {
             return NextResponse.json(
                 { error: `Não é possível excluir produto vinculado a ${productWithClients.clients.length} cliente(s)` },
@@ -138,10 +105,7 @@ export async function DELETE(
             );
         }
 
-        await prisma.product.delete({
-            where: { id: params.id },
-        });
-
+        await prisma.product.delete({ where: { id: params.id } });
         return NextResponse.json({ success: true });
     } catch (error: any) {
         console.error("Erro ao excluir produto:", error);

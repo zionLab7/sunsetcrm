@@ -5,11 +5,11 @@ import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
-// Schema de validação para produto
 const productSchema = z.object({
     name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
     stockCode: z.string().min(1, "Código do estoque é obrigatório"),
-    costPrice: z.number().optional().nullable(),
+    price: z.number().optional().nullable(),     // Preço de venda (gestor only)
+    costPrice: z.number().optional().nullable(),  // Preço de custo (gestor only)
     customFields: z.record(z.string()).optional(),
 });
 
@@ -37,25 +37,21 @@ export async function GET(request: Request) {
                 clients: {
                     include: {
                         client: {
-                            select: {
-                                id: true,
-                                name: true,
-                            },
+                            select: { id: true, name: true },
                         },
                     },
                 },
                 customFieldValues: {
-                    include: {
-                        customField: true,
-                    },
+                    include: { customField: true },
                 },
             },
         });
 
-        // Ocultar costPrice para vendedores
+        // Gestor vê preços fixos; vendedor não
         const isGestor = (user as any).role === "GESTOR";
         const filteredProducts = products.map((p) => ({
             ...p,
+            price: isGestor ? p.price : undefined,
             costPrice: isGestor ? p.costPrice : undefined,
         }));
 
@@ -76,7 +72,6 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
         }
 
-        // Apenas gestores podem criar produtos
         if ((user as any).role !== "GESTOR") {
             return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
@@ -84,7 +79,6 @@ export async function POST(request: Request) {
         const body = await request.json();
         const validatedData = productSchema.parse(body);
 
-        // Verificar se código do estoque já existe
         const existingProduct = await prisma.product.findUnique({
             where: { stockCode: validatedData.stockCode },
         });
@@ -96,53 +90,35 @@ export async function POST(request: Request) {
             );
         }
 
-        // Criar produto
         const product = await prisma.product.create({
             data: {
                 name: validatedData.name,
                 stockCode: validatedData.stockCode,
+                price: validatedData.price ?? null,
                 costPrice: validatedData.costPrice ?? null,
             },
         });
 
-        // Criar valores dos campos customizados
         if (validatedData.customFields) {
-            const customFieldEntries = Object.entries(validatedData.customFields);
-
-            for (const [fieldId, value] of customFieldEntries) {
+            for (const [fieldId, value] of Object.entries(validatedData.customFields)) {
                 if (value && value.trim() !== "") {
                     await prisma.customFieldValue.create({
-                        data: {
-                            customFieldId: fieldId,
-                            productId: product.id,
-                            value: value,
-                        },
+                        data: { customFieldId: fieldId, productId: product.id, value },
                     });
                 }
             }
         }
 
-        // Buscar produto completo com custom fields
         const productWithFields = await prisma.product.findUnique({
             where: { id: product.id },
-            include: {
-                customFieldValues: {
-                    include: {
-                        customField: true,
-                    },
-                },
-            },
+            include: { customFieldValues: { include: { customField: true } } },
         });
 
         return NextResponse.json(productWithFields);
     } catch (error: any) {
         if (error instanceof z.ZodError) {
-            return NextResponse.json(
-                { error: error.errors[0].message },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
         }
-
         console.error("Erro ao criar produto:", error);
         return NextResponse.json(
             { error: error.message || "Erro ao criar produto" },

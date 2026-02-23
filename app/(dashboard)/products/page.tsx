@@ -23,7 +23,7 @@ interface Product {
     id: string;
     name: string;
     stockCode: string;
-    costPrice?: number | null;
+    costPrice?: number | null;  // Preço de custo (nativo, somente gestor)
     clients: Array<{ client: { id: string; name: string } }>;
     customFieldValues: Array<{
         customFieldId: string;
@@ -133,12 +133,20 @@ export default function ProductsPage() {
         if (!fieldDef.formula) return null;
         try {
             const formula = JSON.parse(fieldDef.formula);
-            const sourceValue = product.customFieldValues.find(
-                (cfv) => cfv.customFieldId === formula.sourceField
-            );
-            if (!sourceValue) return null;
-            const numValue = parseFloat(sourceValue.value);
-            if (isNaN(numValue)) return null;
+
+            // Suporte ao campo nativo costPrice via sentinel especial
+            let numValue: number;
+            if (formula.sourceField === "__costPrice__") {
+                if (product.costPrice == null) return null;
+                numValue = product.costPrice;
+            } else {
+                const sourceValue = product.customFieldValues.find(
+                    (cfv) => cfv.customFieldId === formula.sourceField
+                );
+                if (!sourceValue) return null;
+                numValue = parseFloat(sourceValue.value);
+                if (isNaN(numValue)) return null;
+            }
 
             let result: number;
             switch (formula.operation) {
@@ -228,7 +236,6 @@ export default function ProductsPage() {
             ) : (
                 <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                     {products.map((product) => {
-                        const preco = getCustomFieldValue(product, "Preço");
                         const descricao = getCustomFieldValue(product, "Descrição");
 
                         return (
@@ -268,18 +275,14 @@ export default function ProductsPage() {
                                     <div className="space-y-3">
                                         {/* Preço de custo — somente gestor */}
                                         {isGestor && product.costPrice != null && (
-                                            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-md px-3 py-1.5">
-                                                <span className="text-xs font-medium text-amber-700">Custo:</span>
-                                                <span className="text-sm font-bold text-amber-800">
-                                                    {formatCurrency(product.costPrice)}
-                                                </span>
+                                            <div className="bg-amber-50 border border-amber-200 rounded-md px-3 py-2">
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-xs font-medium text-amber-700">Custo:</span>
+                                                    <span className="text-sm font-bold text-amber-900">
+                                                        {formatCurrency(product.costPrice)}
+                                                    </span>
+                                                </div>
                                             </div>
-                                        )}
-
-                                        {preco && (
-                                            <p className="text-2xl font-bold text-primary">
-                                                {formatCurrency(parseFloat(preco))}
-                                            </p>
                                         )}
 
                                         {descricao && (
