@@ -20,9 +20,10 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, MessageCircle } from "lucide-react";
+import { Plus, Search, MessageCircle, FileSpreadsheet } from "lucide-react";
 import { formatCurrency, formatCNPJ, getWhatsAppLink } from "@/lib/utils";
 import { toast } from "@/hooks/use-toast";
+import { ImportClientsModal } from "@/components/clients/import-clients-modal";
 
 interface Client {
     id: string;
@@ -50,9 +51,11 @@ export default function ClientsPage() {
     const router = useRouter();
     const [clients, setClients] = useState<Client[]>([]);
     const [stages, setStages] = useState<PipelineStage[]>([]);
+    const [users, setUsers] = useState<Array<{ id: string; name: string }>>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState("");
     const [selectedStage, setSelectedStage] = useState<string>("all");
+    const [importModalOpen, setImportModalOpen] = useState(false);
 
     useEffect(() => {
         fetchData();
@@ -79,6 +82,17 @@ export default function ClientsPage() {
             const clientsRes = await fetch(`/api/clients?${params}`);
             const clientsData = await clientsRes.json();
             setClients(clientsData.clients || []);
+
+            // Buscar vendedores para o modal de importação (apenas gestores)
+            try {
+                const usersRes = await fetch("/api/users");
+                if (usersRes.ok) {
+                    const usersData = await usersRes.json();
+                    setUsers(usersData.users || []);
+                }
+            } catch {
+                // Vendedores não têm acesso à lista de usuários
+            }
         } catch (error) {
             toast({
                 variant: "destructive",
@@ -112,23 +126,29 @@ export default function ClientsPage() {
     }
 
     return (
-        <div className="flex flex-col gap-6 p-8">
+        <div className="flex flex-col gap-6 p-4 md:p-8">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Clientes</h1>
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Clientes</h1>
                     <p className="text-muted-foreground mt-1">
                         Gerencie seus clientes e acompanhe o histórico
                     </p>
                 </div>
-                <Button onClick={() => router.push("/clients/new")}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Novo Cliente
-                </Button>
+                <div className="flex gap-2">
+                    <Button variant="outline" onClick={() => setImportModalOpen(true)}>
+                        <FileSpreadsheet className="h-4 w-4 mr-2" />
+                        Importar Planilha
+                    </Button>
+                    <Button onClick={() => router.push("/clients/new")}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Novo Cliente
+                    </Button>
+                </div>
             </div>
 
             {/* Filtros */}
-            <div className="flex gap-4">
+            <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
                     <Input
@@ -173,7 +193,7 @@ export default function ClientsPage() {
                     )}
                 </div>
             ) : (
-                <div className="border rounded-lg">
+                <div className="border rounded-lg overflow-x-auto">
                     <Table>
                         <TableHeader>
                             <TableRow>
@@ -239,6 +259,15 @@ export default function ClientsPage() {
                     ? "1 cliente encontrado"
                     : `${filteredClients.length} clientes encontrados`}
             </div>
+
+            {/* Modal de Importação */}
+            <ImportClientsModal
+                open={importModalOpen}
+                onClose={() => setImportModalOpen(false)}
+                onSuccess={fetchData}
+                stages={stages}
+                users={users}
+            />
         </div>
     );
 }

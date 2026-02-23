@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -6,6 +8,7 @@ import { z } from "zod";
 const productSchema = z.object({
     name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
     stockCode: z.string().min(1, "Código do estoque é obrigatório"),
+    costPrice: z.number().optional().nullable(),
     customFields: z.record(z.string()).optional(),
 });
 
@@ -17,6 +20,11 @@ export async function PATCH(
         const user = await getCurrentUser();
         if (!user) {
             return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+        }
+
+        // Apenas gestores podem editar produtos
+        if ((user as any).role !== "GESTOR") {
+            return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
 
         const body = await request.json();
@@ -43,17 +51,16 @@ export async function PATCH(
             data: {
                 name: validatedData.name,
                 stockCode: validatedData.stockCode,
+                costPrice: validatedData.costPrice ?? null,
             },
         });
 
         // Atualizar campos customizados
         if (validatedData.customFields) {
-            // Remover valores antigos
             await prisma.customFieldValue.deleteMany({
                 where: { productId: params.id },
             });
 
-            // Criar novos valores
             const customFieldEntries = Object.entries(validatedData.customFields);
 
             for (const [fieldId, value] of customFieldEntries) {
@@ -69,7 +76,6 @@ export async function PATCH(
             }
         }
 
-        // Buscar produto completo
         const productWithFields = await prisma.product.findUnique({
             where: { id: product.id },
             include: {
@@ -108,12 +114,14 @@ export async function DELETE(
             return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
         }
 
-        // Verificar se produto tem clientes vinculados
+        // Apenas gestores podem excluir produtos
+        if ((user as any).role !== "GESTOR") {
+            return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+        }
+
         const productWithClients = await prisma.product.findUnique({
             where: { id: params.id },
-            include: {
-                clients: true,
-            },
+            include: { clients: true },
         });
 
         if (!productWithClients) {

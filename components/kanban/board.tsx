@@ -4,7 +4,7 @@ import { DragDropContext, Droppable, Draggable, DropResult } from "@hello-pangea
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { MessageCircle } from "lucide-react";
+import { MessageCircle, Archive } from "lucide-react";
 import { formatCurrency, getWhatsAppLink } from "@/lib/utils";
 
 interface Client {
@@ -24,21 +24,22 @@ interface Column {
 interface KanbanBoardProps {
     columns: Column[];
     onDragEnd: (result: DropResult) => void;
+    onArchive?: (clientId: string, clientName: string) => void;
 }
 
-export function KanbanBoard({ columns, onDragEnd }: KanbanBoardProps) {
+export function KanbanBoard({ columns, onDragEnd, onArchive }: KanbanBoardProps) {
     return (
         <DragDropContext onDragEnd={onDragEnd}>
             <div className="flex gap-4 overflow-x-auto pb-4">
                 {columns.map((column) => (
-                    <KanbanColumn key={column.id} column={column} />
+                    <KanbanColumn key={column.id} column={column} onArchive={onArchive} />
                 ))}
             </div>
         </DragDropContext>
     );
 }
 
-function KanbanColumn({ column }: { column: Column }) {
+function KanbanColumn({ column, onArchive }: { column: Column; onArchive?: (clientId: string, clientName: string) => void }) {
     return (
         <div className="flex-shrink-0 w-80">
             <Card>
@@ -63,7 +64,7 @@ function KanbanColumn({ column }: { column: Column }) {
                                 }`}
                         >
                             {column.clients.map((client, index) => (
-                                <ClientCard key={client.id} client={client} index={index} />
+                                <ClientCard key={client.id} client={client} index={index} onArchive={onArchive} />
                             ))}
                             {provided.placeholder}
                         </CardContent>
@@ -74,7 +75,7 @@ function KanbanColumn({ column }: { column: Column }) {
     );
 }
 
-function ClientCard({ client, index }: { client: Client; index: number }) {
+function ClientCard({ client, index, onArchive }: { client: Client; index: number; onArchive?: (clientId: string, clientName: string) => void }) {
     return (
         <Draggable draggableId={client.id} index={index}>
             {(provided, snapshot) => (
@@ -93,23 +94,38 @@ function ClientCard({ client, index }: { client: Client; index: number }) {
                                     {formatCurrency(client.potentialValue)}
                                 </p>
                             </div>
-                            {client.phone && (
-                                <a
-                                    href={getWhatsAppLink(client.phone)}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    onClick={(e) => e.stopPropagation()}
-                                    className="ml-2"
-                                >
+                            <div className="flex items-center gap-1 ml-2">
+                                {onArchive && (
                                     <Button
                                         size="icon"
                                         variant="ghost"
-                                        className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                        className="h-8 w-8 text-muted-foreground hover:text-orange-600 hover:bg-orange-50"
+                                        title="Arquivar do pipeline"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            onArchive(client.id, client.name);
+                                        }}
                                     >
-                                        <MessageCircle className="h-4 w-4" />
+                                        <Archive className="h-4 w-4" />
                                     </Button>
-                                </a>
-                            )}
+                                )}
+                                {client.phone && (
+                                    <a
+                                        href={getWhatsAppLink(client.phone)}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        onClick={(e) => e.stopPropagation()}
+                                    >
+                                        <Button
+                                            size="icon"
+                                            variant="ghost"
+                                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                        >
+                                            <MessageCircle className="h-4 w-4" />
+                                        </Button>
+                                    </a>
+                                )}
+                            </div>
                         </div>
                     </CardContent>
                 </Card>

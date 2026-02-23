@@ -23,6 +23,7 @@ interface Task {
         name: string;
     };
     user: {
+        id: string;
         name: string;
     };
 }

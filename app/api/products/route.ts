@@ -1,13 +1,16 @@
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from "next/server";
 import { getCurrentUser } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
-// Schema de validação para produto (apenas campos fixos)
+// Schema de validação para produto
 const productSchema = z.object({
     name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
     stockCode: z.string().min(1, "Código do estoque é obrigatório"),
-    customFields: z.record(z.string()).optional(), // Campos customizados dinâmicos
+    costPrice: z.number().optional().nullable(),
+    customFields: z.record(z.string()).optional(),
 });
 
 export async function GET(request: Request) {
@@ -49,7 +52,14 @@ export async function GET(request: Request) {
             },
         });
 
-        return NextResponse.json({ products });
+        // Ocultar costPrice para vendedores
+        const isGestor = (user as any).role === "GESTOR";
+        const filteredProducts = products.map((p) => ({
+            ...p,
+            costPrice: isGestor ? p.costPrice : undefined,
+        }));
+
+        return NextResponse.json({ products: filteredProducts });
     } catch (error: any) {
         console.error("Erro ao buscar produtos:", error);
         return NextResponse.json(
@@ -64,6 +74,11 @@ export async function POST(request: Request) {
         const user = await getCurrentUser();
         if (!user) {
             return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+        }
+
+        // Apenas gestores podem criar produtos
+        if ((user as any).role !== "GESTOR") {
+            return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
         }
 
         const body = await request.json();
@@ -81,11 +96,12 @@ export async function POST(request: Request) {
             );
         }
 
-        // Criar produto (apenas campos fixos)
+        // Criar produto
         const product = await prisma.product.create({
             data: {
                 name: validatedData.name,
                 stockCode: validatedData.stockCode,
+                costPrice: validatedData.costPrice ?? null,
             },
         });
 

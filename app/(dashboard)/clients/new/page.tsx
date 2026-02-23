@@ -46,7 +46,7 @@ export default async function NewClientPage() {
     });
 
     return (
-        <div className="flex flex-col gap-6 p-8 max-w-2xl">
+        <div className="flex flex-col gap-6 p-4 md:p-8 max-w-2xl">
             <div>
                 <h1 className="text-3xl font-bold tracking-tight">Novo Cliente</h1>
                 <p className="text-muted-foreground mt-1">

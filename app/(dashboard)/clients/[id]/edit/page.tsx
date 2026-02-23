@@ -84,7 +84,7 @@ export default async function EditClientPage({
     // Mapear dados do cliente para o formato do formulário
     const initialData = {
         name: client.name,
-        cnpj: client.cnpj,
+        cnpj: client.cnpj ?? undefined,
         email: client.email || "",
         phone: client.phone || "",
         potentialValue: client.potentialValue || 0,
@@ -94,7 +94,7 @@ export default async function EditClientPage({
     };
 
     return (
-        <div className="p-8">
+        <div className="p-4 md:p-8">
             {/* Botão Voltar */}
             <Link href={`/clients/${client.id}`}>
                 <Button variant="ghost" className="mb-6">

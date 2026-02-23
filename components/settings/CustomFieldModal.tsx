@@ -30,6 +30,9 @@ const customFieldSchema = z.object({
     options: z.string().optional(),
     required: z.boolean(),
     order: z.string(),
+    formulaSourceField: z.string().optional(),
+    formulaOperation: z.string().optional(),
+    formulaValue: z.string().optional(),
 });
 
 type CustomFieldFormData = z.infer<typeof customFieldSchema>;
@@ -44,6 +47,7 @@ interface CustomFieldModalProps {
         name: string;
         fieldType: string;
         options?: string | null;
+        formula?: string | null;
         required: boolean;
         order: number;
     };
@@ -59,6 +63,10 @@ export function CustomFieldModal({
     const [loading, setLoading] = useState(false);
     const [fieldType, setFieldType] = useState("text");
     const [required, setRequired] = useState(false);
+    const [sourceFields, setSourceFields] = useState<Array<{ id: string; name: string }>>([]);
+    const [formulaSourceField, setFormulaSourceField] = useState("");
+    const [formulaOperation, setFormulaOperation] = useState("percentage_discount");
+    const [formulaValue, setFormulaValue] = useState("");
 
     const {
         register,
@@ -80,15 +88,24 @@ export function CustomFieldModal({
     useEffect(() => {
         if (open) {
             if (initialData) {
+                const parsedFormula = initialData.formula ? JSON.parse(initialData.formula) : null;
                 reset({
                     name: initialData.name,
                     fieldType: initialData.fieldType,
                     options: initialData.options || "",
                     required: initialData.required,
                     order: initialData.order.toString(),
+                    formulaSourceField: parsedFormula?.sourceField || "",
+                    formulaOperation: parsedFormula?.operation || "percentage_discount",
+                    formulaValue: parsedFormula?.value?.toString() || "",
                 });
                 setFieldType(initialData.fieldType);
                 setRequired(initialData.required);
+                if (parsedFormula) {
+                    setFormulaSourceField(parsedFormula.sourceField || "");
+                    setFormulaOperation(parsedFormula.operation || "percentage_discount");
+                    setFormulaValue(parsedFormula.value?.toString() || "");
+                }
             } else {
                 reset({
                     name: "",
@@ -96,20 +113,38 @@ export function CustomFieldModal({
                     options: "",
                     required: false,
                     order: "0",
+                    formulaSourceField: "",
+                    formulaOperation: "percentage_discount",
+                    formulaValue: "",
                 });
                 setFieldType("text");
                 setRequired(false);
+                setFormulaSourceField("");
+                setFormulaOperation("percentage_discount");
+                setFormulaValue("");
+            }
+
+            // Fetch available number fields for formula source
+            if (entityType === "PRODUCT") {
+                fetch(`/api/custom-fields?entityType=PRODUCT`)
+                    .then((r) => r.json())
+                    .then((data) => {
+                        const numberFields = (data.customFields || []).filter(
+                            (f: any) => f.fieldType === "number" && f.id !== initialData?.id
+                        );
+                        setSourceFields(numberFields);
+                    })
+                    .catch(() => { });
             }
         }
-    }, [open, initialData, reset]);
+    }, [open, initialData, reset, entityType]);
 
     const onSubmit = async (data: CustomFieldFormData) => {
         setLoading(true);
         try {
             // Processar opções para tipo select
             let processedOptions = null;
-            if (data.fieldType === "select" && data.options) {
-                // Converter "opcao 1, opcao 2, opcao 3" para ["opcao 1", "opcao 2", "opcao 3"]
+            if (fieldType === "select" && data.options) {
                 const optionsArray = data.options
                     .split(",")
                     .map((opt) => opt.trim())
@@ -117,13 +152,30 @@ export function CustomFieldModal({
                 processedOptions = JSON.stringify(optionsArray);
             }
 
+            // Processar fórmula para tipo calculated
+            let processedFormula = null;
+            if (fieldType === "calculated") {
+                processedFormula = JSON.stringify({
+                    sourceField: formulaSourceField,
+                    operation: formulaOperation,
+                    value: parseFloat(formulaValue) || 0,
+                });
+            }
+
             const payload: any = {
                 name: data.name,
-                fieldType: data.fieldType,
-                options: processedOptions,
-                required: data.required,
-                order: parseInt(data.order),
+                fieldType: fieldType,
+                required: fieldType === "calculated" ? false : required,
+                order: parseInt(data.order) || 0,
             };
+
+            // Só incluir options/formula quando relevante
+            if (processedOptions) {
+                payload.options = processedOptions;
+            }
+            if (processedFormula) {
+                payload.formula = processedFormula;
+            }
 
             // Adicionar entityType apenas ao criar (POST), não ao editar (PATCH)
             if (!initialData?.id) {
@@ -212,6 +264,9 @@ export function CustomFieldModal({
                                 <SelectItem value="number">Número</SelectItem>
                                 <SelectItem value="date">Data</SelectItem>
                                 <SelectItem value="select">Seleção (dropdown)</SelectItem>
+                                {entityType === "PRODUCT" && (
+                                    <SelectItem value="calculated">📊 Calculado (automático)</SelectItem>
+                                )}
                             </SelectContent>
                         </Select>
                     </div>
@@ -228,6 +283,65 @@ export function CustomFieldModal({
                             />
                             <p className="text-xs text-muted-foreground mt-1">
                                 Separe cada opção com vírgula
+                            </p>
+                        </div>
+                    )}
+
+                    {/* Fórmula (apenas para calculated) */}
+                    {fieldType === "calculated" && (
+                        <div className="space-y-3 p-3 bg-purple-50 border border-purple-200 rounded-lg">
+                            <p className="text-xs font-semibold text-purple-700">
+                                📊 Configuração da Fórmula
+                            </p>
+                            <div>
+                                <Label className="text-xs">Campo Fonte</Label>
+                                <Select
+                                    value={formulaSourceField}
+                                    onValueChange={setFormulaSourceField}
+                                >
+                                    <SelectTrigger className="mt-1">
+                                        <SelectValue placeholder="Selecione o campo..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {sourceFields.map((f) => (
+                                            <SelectItem key={f.id} value={f.id}>
+                                                {f.name}
+                                            </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label className="text-xs">Operação</Label>
+                                <Select
+                                    value={formulaOperation}
+                                    onValueChange={setFormulaOperation}
+                                >
+                                    <SelectTrigger className="mt-1">
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="percentage_discount">Desconto (%)</SelectItem>
+                                        <SelectItem value="percentage_add">Acréscimo (%)</SelectItem>
+                                        <SelectItem value="fixed_discount">Desconto Fixo (R$)</SelectItem>
+                                        <SelectItem value="fixed_add">Acréscimo Fixo (R$)</SelectItem>
+                                        <SelectItem value="multiply">Multiplicar</SelectItem>
+                                    </SelectContent>
+                                </Select>
+                            </div>
+                            <div>
+                                <Label className="text-xs">Valor</Label>
+                                <Input
+                                    type="number"
+                                    step="any"
+                                    value={formulaValue}
+                                    onChange={(e) => setFormulaValue(e.target.value)}
+                                    placeholder="Ex: 10 para 10%, ou 1.15 para multiplicador"
+                                    className="mt-1"
+                                />
+                            </div>
+                            <p className="text-xs text-purple-600">
+                                Este campo será calculado automaticamente e não poderá ser editado manualmente.
                             </p>
                         </div>
                     )}

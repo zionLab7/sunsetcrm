@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -19,17 +19,55 @@ import {
     FileText,
     ArrowRightLeft,
     Package,
+    Copy,
+    Check,
+    Archive,
+    ArchiveRestore,
 } from "lucide-react";
 import { formatCurrency, formatCNPJ, formatPhone, getWhatsAppLink, getRelativeTime } from "@/lib/utils";
+import { toast } from "@/hooks/use-toast";
+
+// Botão de copiar reutilizável
+function CopyButton({ text, label }: { text: string; label?: string }) {
+    const [copied, setCopied] = useState(false);
+
+    const handleCopy = async () => {
+        try {
+            await navigator.clipboard.writeText(text);
+            setCopied(true);
+            toast({ title: `✅ ${label || "Texto"} copiado!` });
+            setTimeout(() => setCopied(false), 2000);
+        } catch {
+            toast({ variant: "destructive", title: "Erro ao copiar" });
+        }
+    };
+
+    return (
+        <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleCopy}
+            className="h-7 w-7 p-0"
+            title={`Copiar ${label || ""}`}
+        >
+            {copied ? (
+                <Check className="h-3.5 w-3.5 text-green-600" />
+            ) : (
+                <Copy className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
+        </Button>
+    );
+}
 
 interface ClientDossierProps {
     client: {
         id: string;
         name: string;
-        cnpj: string;
+        cnpj: string | null;
         phone: string | null;
         email: string | null;
         potentialValue: number;
+        archivedFromPipeline?: boolean;
         currentStage: {
             id: string;
             name: string;
@@ -44,7 +82,7 @@ interface ClientDossierProps {
             id: string;
             type: string;
             description: string;
-            createdAt: string;
+            createdAt: string | Date;
             user: {
                 id: string;
                 name: string;
@@ -54,7 +92,7 @@ interface ClientDossierProps {
             id: string;
             title: string;
             status: string;
-            dueDate: string;
+            dueDate: string | Date;
             user: {
                 id: string;
                 name: string;
@@ -82,6 +120,39 @@ const INTERACTION_ICONS: Record<string, { icon: any; label: string; color: strin
 export function ClientDossier({ client }: ClientDossierProps) {
     const router = useRouter();
     const [interactionModalOpen, setInteractionModalOpen] = useState(false);
+    const [pabxUrl, setPabxUrl] = useState<string | null>(null);
+    const [isArchived, setIsArchived] = useState(client.archivedFromPipeline || false);
+    const [archiving, setArchiving] = useState(false);
+
+    useEffect(() => {
+        fetch("/api/admin/system-config?key=pabxUrlTemplate")
+            .then((res) => res.json())
+            .then((data) => {
+                if (data.config?.value) setPabxUrl(data.config.value);
+            })
+            .catch(() => { });
+    }, []);
+
+    const handleToggleArchive = async () => {
+        setArchiving(true);
+        try {
+            const res = await fetch(`/api/clients/${client.id}/archive`, { method: "PATCH" });
+            if (!res.ok) throw new Error();
+            const data = await res.json();
+            setIsArchived(data.archived);
+            toast({
+                title: data.archived ? "📦 Cliente arquivado" : "✅ Cliente restaurado",
+                description: data.archived
+                    ? "Removido do pipeline de vendas"
+                    : "Restaurado ao pipeline de vendas",
+            });
+            router.refresh();
+        } catch {
+            toast({ variant: "destructive", title: "Erro ao processar" });
+        } finally {
+            setArchiving(false);
+        }
+    };
 
     return (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 min-h-screen">
@@ -93,18 +164,48 @@ export function ClientDossier({ client }: ClientDossierProps) {
                         <div className="flex items-start justify-between mb-4">
                             <div>
                                 <h2 className="text-2xl font-bold">{client.name}</h2>
-                                <p className="text-sm text-muted-foreground mt-1">
-                                    {formatCNPJ(client.cnpj)}
+                                {client.cnpj && (
+                                    <div className="flex items-center gap-1 mt-1">
+                                        <p className="text-sm text-muted-foreground">
+                                            {formatCNPJ(client.cnpj)}
+                                        </p>
+                                        <CopyButton text={client.cnpj} label="CNPJ" />
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex gap-1">
+                                <Button
+                                    size="sm"
+                                    variant={isArchived ? "default" : "outline"}
+                                    onClick={handleToggleArchive}
+                                    disabled={archiving}
+                                    title={isArchived ? "Restaurar ao pipeline" : "Arquivar do pipeline"}
+                                    className={isArchived ? "bg-orange-500 hover:bg-orange-600" : ""}
+                                >
+                                    {isArchived ? (
+                                        <ArchiveRestore className="h-4 w-4" />
+                                    ) : (
+                                        <Archive className="h-4 w-4" />
+                                    )}
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => router.push(`/clients/${client.id}/edit`)}
+                                >
+                                    <Edit className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+
+                        {isArchived && (
+                            <div className="bg-orange-50 border border-orange-200 rounded-lg px-3 py-2 mb-2">
+                                <p className="text-xs text-orange-700 font-medium flex items-center gap-1">
+                                    <Archive className="h-3 w-3" />
+                                    Arquivado do pipeline
                                 </p>
                             </div>
-                            <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => router.push(`/clients/${client.id}/edit`)}
-                            >
-                                <Edit className="h-4 w-4" />
-                            </Button>
-                        </div>
+                        )}
 
                         <Separator className="my-4" />
 
@@ -164,16 +265,29 @@ export function ClientDossier({ client }: ClientDossierProps) {
                                 <div className="flex items-center gap-2">
                                     <Phone className="h-4 w-4 text-muted-foreground" />
                                     <span className="text-sm">{formatPhone(client.phone)}</span>
-                                    <a
-                                        href={getWhatsAppLink(client.phone)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="ml-auto"
-                                    >
-                                        <Button size="sm" variant="ghost">
-                                            <MessageCircle className="h-4 w-4 text-green-600" />
-                                        </Button>
-                                    </a>
+                                    <div className="ml-auto flex items-center gap-0.5">
+                                        <CopyButton text={client.phone} label="Telefone" />
+                                        {pabxUrl && (
+                                            <a
+                                                href={pabxUrl.replace("{phone}", client.phone.replace(/\D/g, ""))}
+                                                target="_blank"
+                                                rel="noopener noreferrer"
+                                            >
+                                                <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="Ligar via PABX">
+                                                    <PhoneCall className="h-4 w-4 text-blue-600" />
+                                                </Button>
+                                            </a>
+                                        )}
+                                        <a
+                                            href={getWhatsAppLink(client.phone)}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                        >
+                                            <Button size="sm" variant="ghost" className="h-7 w-7 p-0" title="WhatsApp">
+                                                <MessageCircle className="h-4 w-4 text-green-600" />
+                                            </Button>
+                                        </a>
+                                    </div>
                                 </div>
                             )}
 
@@ -182,10 +296,13 @@ export function ClientDossier({ client }: ClientDossierProps) {
                                     <Mail className="h-4 w-4 text-muted-foreground" />
                                     <a
                                         href={`mailto:${client.email}`}
-                                        className="text-sm hover:underline"
+                                        className="text-sm hover:underline truncate"
                                     >
                                         {client.email}
                                     </a>
+                                    <div className="ml-auto">
+                                        <CopyButton text={client.email} label="Email" />
+                                    </div>
                                 </div>
                             )}
                         </div>

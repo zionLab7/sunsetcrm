@@ -94,11 +94,11 @@ export default function ReportsPage() {
     }
 
     return (
-        <div className="flex flex-col gap-6 p-8">
+        <div className="flex flex-col gap-6 p-4 md:p-8">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight">
                         Relatórios Gerenciais
                     </h1>
                     <p className="text-muted-foreground mt-1">
@@ -109,7 +109,7 @@ export default function ReportsPage() {
             </div>
 
             {/* Filtros e Exportação */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <Select value={period} onValueChange={setPeriod}>
                     <SelectTrigger className="w-[200px]">
                         <SelectValue />

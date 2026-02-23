@@ -230,8 +230,6 @@ async function main() {
         data: {
             name: 'Café Premium 1kg',
             stockCode: 'CAF-001',
-            price: 25.90,
-            description: 'Café torrado e moído de alta qualidade',
         },
     });
 
@@ -239,8 +237,6 @@ async function main() {
         data: {
             name: 'Açúcar Cristal 5kg',
             stockCode: 'ACU-002',
-            price: 18.50,
-            description: 'Açúcar cristal refinado',
         },
     });
 
@@ -248,8 +244,6 @@ async function main() {
         data: {
             name: 'Arroz Tipo 1 5kg',
             stockCode: 'ARR-003',
-            price: 22.00,
-            description: 'Arroz branco tipo 1 longo fino',
         },
     });
 
@@ -257,8 +251,6 @@ async function main() {
         data: {
             name: 'Feijão Preto 1kg',
             stockCode: 'FEI-004',
-            price: 8.90,
-            description: 'Feijão preto tipo 1',
         },
     });
 
@@ -266,8 +258,6 @@ async function main() {
         data: {
             name: 'Óleo de Soja 900ml',
             stockCode: 'OLE-005',
-            price: 6.50,
-            description: 'Óleo de soja refinado',
         },
     });
 
@@ -313,6 +303,7 @@ async function main() {
             fieldType: 'text',
             order: 1,
             required: false,
+            entityType: 'CLIENT',
         },
     });
 
@@ -322,6 +313,7 @@ async function main() {
             fieldType: 'number',
             order: 2,
             required: false,
+            entityType: 'CLIENT',
         },
     });
 
@@ -332,6 +324,7 @@ async function main() {
             options: JSON.stringify(['Varejo', 'Atacado', 'E-commerce', 'Distribuição']),
             order: 3,
             required: false,
+            entityType: 'CLIENT',
         },
     });
 
@@ -341,6 +334,7 @@ async function main() {
             fieldType: 'date',
             order: 4,
             required: false,
+            entityType: 'CLIENT',
         },
     });
 

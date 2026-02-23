@@ -26,6 +26,7 @@ import { toast } from "@/hooks/use-toast";
 const productSchema = z.object({
     name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
     stockCode: z.string().min(1, "Código do estoque é obrigatório"),
+    costPrice: z.string().optional(),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
@@ -42,10 +43,12 @@ interface ProductModalProps {
     open: boolean;
     onClose: () => void;
     onSuccess: () => void;
+    userRole?: string;
     initialData?: {
         id?: string;
         name: string;
         stockCode: string;
+        costPrice?: number | null;
         customFieldValues?: Array<{
             customFieldId: string;
             value: string;
@@ -61,11 +64,14 @@ export function ProductModal({
     open,
     onClose,
     onSuccess,
+    userRole,
     initialData,
 }: ProductModalProps) {
     const [loading, setLoading] = useState(false);
     const [customFields, setCustomFields] = useState<CustomField[]>([]);
     const [customFieldValues, setCustomFieldValues] = useState<Record<string, string>>({});
+
+    const isGestor = userRole === "GESTOR";
 
     const {
         register,
@@ -77,10 +83,10 @@ export function ProductModal({
         defaultValues: {
             name: initialData?.name || "",
             stockCode: initialData?.stockCode || "",
+            costPrice: initialData?.costPrice?.toString() || "",
         },
     });
 
-    // Buscar campos customizados para produtos
     useEffect(() => {
         const fetchCustomFields = async () => {
             try {
@@ -97,15 +103,14 @@ export function ProductModal({
         }
     }, [open]);
 
-    // Resetar formulário quando abrir/fechar ou mudar dados iniciais
     useEffect(() => {
         if (open) {
             reset({
                 name: initialData?.name || "",
                 stockCode: initialData?.stockCode || "",
+                costPrice: initialData?.costPrice?.toString() || "",
             });
 
-            // Preencher valores dos campos customizados
             const values: Record<string, string> = {};
             if (initialData?.customFieldValues) {
                 initialData.customFieldValues.forEach((cfv) => {
@@ -120,7 +125,9 @@ export function ProductModal({
         setLoading(true);
         try {
             const payload = {
-                ...data,
+                name: data.name,
+                stockCode: data.stockCode,
+                costPrice: data.costPrice ? parseFloat(data.costPrice) : null,
                 customFields: customFieldValues,
             };
 
@@ -199,7 +206,6 @@ export function ProductModal({
                     try {
                         options = JSON.parse(field.options);
                     } catch {
-                        // Fallback para formato antigo (string separada por vírgula)
                         options = field.options.split(",").map(opt => opt.trim());
                     }
                 }
@@ -218,7 +224,7 @@ export function ProductModal({
                     </Select>
                 );
 
-            default: // text
+            default:
                 if (field.name === "Descrição") {
                     return (
                         <Textarea
@@ -281,6 +287,26 @@ export function ProductModal({
                         </p>
                     </div>
 
+                    {/* Preço de Custo — apenas para Gestores */}
+                    {isGestor && (
+                        <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
+                            <Label htmlFor="costPrice" className="text-amber-800 font-medium">
+                                🔒 Preço de Custo (Gestor)
+                            </Label>
+                            <Input
+                                id="costPrice"
+                                type="number"
+                                step="0.01"
+                                {...register("costPrice")}
+                                placeholder="Ex: 10.50"
+                                className="mt-1 border-amber-300 focus:ring-amber-500"
+                            />
+                            <p className="text-xs text-amber-600 mt-1">
+                                Visível apenas para gestores. Usado para calcular margens.
+                            </p>
+                        </div>
+                    )}
+
                     {/* Campos Customizados */}
                     {customFields.length > 0 && (
                         <>
@@ -290,15 +316,17 @@ export function ProductModal({
                                 </h4>
                             </div>
 
-                            {customFields.map((field) => (
-                                <div key={field.id}>
-                                    <Label htmlFor={`custom-${field.id}`}>
-                                        {field.name}
-                                        {field.required && " *"}
-                                    </Label>
-                                    {renderCustomField(field)}
-                                </div>
-                            ))}
+                            {customFields
+                                .filter((field) => field.fieldType !== "calculated")
+                                .map((field) => (
+                                    <div key={field.id}>
+                                        <Label htmlFor={`custom-${field.id}`}>
+                                            {field.name}
+                                            {field.required && " *"}
+                                        </Label>
+                                        {renderCustomField(field)}
+                                    </div>
+                                ))}
                         </>
                     )}
 

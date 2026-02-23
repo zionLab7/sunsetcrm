@@ -71,7 +71,7 @@ export default async function ClientPage({
     }
 
     return (
-        <div className="p-8">
+        <div className="p-4 md:p-8">
             {/* Botão Voltar */}
             <Link href="/clients">
                 <Button variant="ghost" className="mb-6">

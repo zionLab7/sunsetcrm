@@ -15,6 +15,7 @@ interface CustomField {
     fieldType: string;
     entityType: string;
     options: string | null;
+    formula: string | null;
     required: boolean;
     order: number;
     values?: Array<any>;
@@ -111,8 +112,26 @@ export function CustomFieldsTab() {
             number: "Número",
             date: "Data",
             select: "Seleção",
+            calculated: "📊 Calculado",
         };
         return types[type] || type;
+    };
+
+    const getFormulaDescription = (formula: string | null) => {
+        if (!formula) return null;
+        try {
+            const f = JSON.parse(formula);
+            const ops: Record<string, string> = {
+                percentage_discount: `Desconto de ${f.value}%`,
+                percentage_add: `Acréscimo de ${f.value}%`,
+                fixed_discount: `Desconto de R$ ${f.value}`,
+                fixed_add: `Acréscimo de R$ ${f.value}`,
+                multiply: `Multiplicar por ${f.value}`,
+            };
+            return ops[f.operation] || "Fórmula configurada";
+        } catch {
+            return null;
+        }
     };
 
     const renderFieldsList = (fields: CustomField[], entityType: "CLIENT" | "PRODUCT") => {
@@ -171,11 +190,15 @@ export function CustomFieldsTab() {
                                                         try {
                                                             return JSON.parse(field.options).join(", ");
                                                         } catch {
-                                                            // Fallback para formato antigo (string separada por vírgula)
                                                             return field.options;
                                                         }
                                                     })()}
                                                 </p>
+                                            )}
+                                            {field.fieldType === "calculated" && (
+                                                <Badge variant="outline" className="text-xs text-purple-600 border-purple-300">
+                                                    {getFormulaDescription(field.formula) || "Fórmula configurada"}
+                                                </Badge>
                                             )}
                                         </div>
                                     </div>

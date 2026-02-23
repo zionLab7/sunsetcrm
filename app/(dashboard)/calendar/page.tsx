@@ -84,7 +84,7 @@ export default function CalendarPage() {
             );
 
             // Buscar usuários (vendedores) se for gestor
-            if (session?.user?.role === "GESTOR") {
+            if ((session?.user as any)?.role === "GESTOR") {
                 const usersRes = await fetch("/api/users");
                 const usersData = await usersRes.json();
                 setUsers(
@@ -165,11 +165,11 @@ export default function CalendarPage() {
     }
 
     return (
-        <div className="flex flex-col gap-6 p-8">
+        <div className="flex flex-col gap-6 p-4 md:p-8">
             {/* Header */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold tracking-tight">Agenda</h1>
+                    <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Agenda</h1>
                     <p className="text-muted-foreground mt-1">
                         Gerencie suas tarefas e compromissos
                     </p>
@@ -234,8 +234,8 @@ export default function CalendarPage() {
                 onSuccess={fetchData}
                 clients={clients}
                 users={users}
-                currentUserId={session?.user?.id as string}
-                userRole={session?.user?.role as string}
+                currentUserId={(session?.user as any)?.id as string}
+                userRole={(session?.user as any)?.role as string}
                 initialData={
                     selectedTask
                         ? {

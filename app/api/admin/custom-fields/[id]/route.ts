@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from "next/server";
 import { requireRole } from "@/lib/session";
 import { prisma } from "@/lib/prisma";
@@ -5,8 +7,9 @@ import { z } from "zod";
 
 const customFieldSchema = z.object({
     name: z.string().min(1, "Nome é obrigatório"),
-    fieldType: z.enum(["text", "number", "date", "select"]),
+    fieldType: z.enum(["text", "number", "date", "select", "calculated"]),
     options: z.string().nullable().optional(),
+    formula: z.string().nullable().optional(),
     required: z.boolean().default(false),
     order: z.number().default(0),
 });
@@ -24,7 +27,14 @@ export async function PATCH(
 
         const customField = await prisma.customField.update({
             where: { id: params.id },
-            data: validatedData,
+            data: {
+                name: validatedData.name,
+                fieldType: validatedData.fieldType,
+                options: validatedData.options ?? null,
+                formula: validatedData.formula ?? null,
+                required: validatedData.required,
+                order: validatedData.order,
+            },
         });
 
         return NextResponse.json(customField);

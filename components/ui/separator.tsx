@@ -4,11 +4,15 @@ import { cn } from "@/lib/utils";
 
 const Separator = React.forwardRef<
     HTMLDivElement,
-    React.ComponentPropsWithoutRef<"div">
->(({ className, ...props }, ref) => (
+    React.ComponentPropsWithoutRef<"div"> & { orientation?: "horizontal" | "vertical" }
+>(({ className, orientation = "horizontal", ...props }, ref) => (
     <div
         ref={ref}
-        className={cn("shrink-0 bg-border h-[1px] w-full", className)}
+        className={cn(
+            "shrink-0 bg-border",
+            orientation === "horizontal" ? "h-[1px] w-full" : "h-full w-[1px]",
+            className
+        )}
         {...props}
     />
 ));

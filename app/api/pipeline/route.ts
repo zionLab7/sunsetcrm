@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCurrentUser } from "@/lib/session";
@@ -17,9 +19,12 @@ export async function GET() {
             orderBy: { order: "asc" },
         });
 
-        // Buscar clientes
+        // Buscar clientes (excluir arquivados do pipeline)
         const clients = await prisma.client.findMany({
-            where: userRole === "GESTOR" ? {} : { assignedUserId: userId },
+            where: {
+                ...(userRole === "GESTOR" ? {} : { assignedUserId: userId }),
+                archivedFromPipeline: false,
+            },
             include: {
                 currentStage: true,
             },
@@ -30,6 +35,7 @@ export async function GET() {
             id: stage.id,
             name: stage.name,
             color: stage.color,
+            isClosedStage: stage.isClosedStage,
             clients: clients
                 .filter((c) => c.currentStageId === stage.id)
                 .map((c) => ({

@@ -10,11 +10,13 @@ interface Task {
     title: string;
     description: string | null;
     status: string;
+    dueDate: string;
     client?: {
         id: string;
         name: string;
     };
     user: {
+        id: string;
         name: string;
     };
 }
