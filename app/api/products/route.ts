@@ -8,8 +8,7 @@ import { z } from "zod";
 const productSchema = z.object({
     name: z.string().min(3, "Nome deve ter pelo menos 3 caracteres"),
     stockCode: z.string().min(1, "Código do estoque é obrigatório"),
-    price: z.number().optional().nullable(),     // Preço de venda (gestor only)
-    costPrice: z.number().optional().nullable(),  // Preço de custo (gestor only)
+    costPrice: z.number().optional().nullable(), // Preço de custo (gestor only)
     customFields: z.record(z.string()).optional(),
 });
 
@@ -36,9 +35,7 @@ export async function GET(request: Request) {
             include: {
                 clients: {
                     include: {
-                        client: {
-                            select: { id: true, name: true },
-                        },
+                        client: { select: { id: true, name: true } },
                     },
                 },
                 customFieldValues: {
@@ -47,21 +44,62 @@ export async function GET(request: Request) {
             },
         });
 
-        // Gestor vê preços fixos; vendedor não
         const isGestor = (user as any).role === "GESTOR";
-        const filteredProducts = products.map((p) => ({
-            ...p,
-            price: isGestor ? p.price : undefined,
-            costPrice: isGestor ? p.costPrice : undefined,
-        }));
+
+        // Fetch calculated field definitions for PRODUCT
+        const calculatedFieldDefs = await prisma.customField.findMany({
+            where: { entityType: "PRODUCT", fieldType: "calculated" },
+        });
+
+        // Helper: compute a single calculated value given a product
+        function computeCalcValue(
+            p: typeof products[number],
+            formula: { sourceField: string; operation: string; value: number }
+        ): number | null {
+            let numValue: number;
+            if (formula.sourceField === "__costPrice__") {
+                if (p.costPrice == null) return null;
+                numValue = p.costPrice;
+            } else {
+                const cfv = p.customFieldValues.find(
+                    (c) => c.customFieldId === formula.sourceField
+                );
+                if (!cfv) return null;
+                numValue = parseFloat(cfv.value);
+                if (isNaN(numValue)) return null;
+            }
+            switch (formula.operation) {
+                case "percentage_discount": return numValue * (1 - formula.value / 100);
+                case "percentage_add": return numValue * (1 + formula.value / 100);
+                case "fixed_discount": return numValue - formula.value;
+                case "fixed_add": return numValue + formula.value;
+                case "multiply": return numValue * formula.value;
+                default: return null;
+            }
+        }
+
+        // Gestor: vê costPrice; Vendedor: costPrice=undefined mas recebe calculatedFieldValues pré-computados
+        const filteredProducts = products.map((p) => {
+            const calculatedFieldValues: Record<string, string> = {};
+            for (const fd of calculatedFieldDefs) {
+                if (!fd.formula) continue;
+                try {
+                    const formula = JSON.parse(fd.formula);
+                    const result = computeCalcValue(p, formula);
+                    if (result !== null) calculatedFieldValues[fd.id] = result.toFixed(2);
+                } catch { /* invalid formula */ }
+            }
+            return {
+                ...p,
+                costPrice: isGestor ? p.costPrice : undefined,
+                calculatedFieldValues, // pré-computado para todos os roles
+            };
+        });
 
         return NextResponse.json({ products: filteredProducts });
     } catch (error: any) {
         console.error("Erro ao buscar produtos:", error);
-        return NextResponse.json(
-            { error: error.message || "Erro ao buscar produtos" },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: error.message || "Erro ao buscar produtos" }, { status: 500 });
     }
 }
 
@@ -71,9 +109,8 @@ export async function POST(request: Request) {
         if (!user) {
             return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
         }
-
         if ((user as any).role !== "GESTOR") {
-            return NextResponse.json({ error: "Acesso negado" }, { status: 403 });
+            return NextResponse.json({ error: "Acesso negado. Apenas gestores podem criar produtos." }, { status: 403 });
         }
 
         const body = await request.json();
@@ -82,28 +119,23 @@ export async function POST(request: Request) {
         const existingProduct = await prisma.product.findUnique({
             where: { stockCode: validatedData.stockCode },
         });
-
         if (existingProduct) {
-            return NextResponse.json(
-                { error: "Código do estoque já existe" },
-                { status: 400 }
-            );
+            return NextResponse.json({ error: "Código do estoque já existe" }, { status: 400 });
         }
 
         const product = await prisma.product.create({
             data: {
                 name: validatedData.name,
                 stockCode: validatedData.stockCode,
-                price: validatedData.price ?? null,
                 costPrice: validatedData.costPrice ?? null,
             },
         });
 
         if (validatedData.customFields) {
             for (const [fieldId, value] of Object.entries(validatedData.customFields)) {
-                if (value && value.trim() !== "") {
+                if (value && String(value).trim() !== "") {
                     await prisma.customFieldValue.create({
-                        data: { customFieldId: fieldId, productId: product.id, value },
+                        data: { customFieldId: fieldId, productId: product.id, value: String(value) },
                     });
                 }
             }
@@ -120,9 +152,6 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: error.errors[0].message }, { status: 400 });
         }
         console.error("Erro ao criar produto:", error);
-        return NextResponse.json(
-            { error: error.message || "Erro ao criar produto" },
-            { status: 500 }
-        );
+        return NextResponse.json({ error: error.message || "Erro ao criar produto" }, { status: 500 });
     }
 }
